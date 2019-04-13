@@ -1,5 +1,4 @@
 #include <stdio.h>
-
 #include <unistd.h>
 #include <linux/fb.h>
 #include <stdlib.h>
@@ -26,9 +25,8 @@
 #define VIDEO_WIDTH 640
 #define VIDEO_HEIGHT 480
 #define BUFFER_COUNT 4
-#define clip_8bit(val) ((val) < 0 ? 0 : (val) > 255 ? 255 : (val))
+#define clip_8bit(val) (val) < 0 ? 0 :( (val) > 255 ? 255 : (val) )
 
-/*cur  branch */
 #pragma pack(1)
 
 typedef struct BmpFileHeader{
@@ -95,7 +93,7 @@ int main()
     bi.biPlanes = 1;
     bi.biBitCount = 24;
     bi.biCompression = 0;
-    bi.biSizeImage = VIDEO_WIDTH*VIDEO_WIDTH*3;
+    bi.biSizeImage = VIDEO_HEIGHT*VIDEO_WIDTH*3;
     bi.biXPelsPerMeter = 0;
     bi.biYPelsPerMeter = 0;
     bi.biClrUsed = 0;
@@ -252,7 +250,7 @@ int main()
  
     printf("start camera testing...\n");
     fp = fopen(CAPTURE_FILE, "wb");//打开存储文件
-    //bmp = fopen(BMP_FILE, "wb");//打开bmp存储文件
+    bmp = fopen(BMP_FILE, "wb");//打开bmp存储文件
  
     //开始视频测试
     if (ret < 0) 
@@ -272,18 +270,18 @@ int main()
     }
     printf("open file success.\n");
 
-    for(i=0;i<100;i++)
+    for(i=0;i<1;i++)
     {
         //内存空间出队列
     ret = ioctl(fd, VIDIOC_DQBUF, &buf);
     fwrite(framebuf[buf.index].start, buf.bytesused, 1, fp);
     printf("save one frame success.\n"); //CAPTURE_FILE
-   /* yuyv_to_rgb(framebuf[buf.index].start,rgb_frame_buffer,VIDEO_WIDTH,VIDEO_HEIGHT);
+    yuyv_to_rgb(framebuf[buf.index].start,rgb_frame_buffer,VIDEO_WIDTH,VIDEO_HEIGHT);
     printf("yuyv to rgb success!\n");
     fwrite(&bf, 14, 1, bmp);
     fwrite(&bi, 40, 1, bmp);
     fwrite(rgb_frame_buffer, bi.biSizeImage, 1, bmp);
-    printf("save bmp file  success.\n"); //CAPTURE_FILE*/
+    printf("save bmp file  success.\n"); //CAPTURE_FILE
 
 
     // 内存重新入队列
@@ -311,48 +309,53 @@ int main()
 
 
 
-/*convert yuyv yto rgb yuyv转换为rgb格式*/
+/*convert yuyv yto rgb yuyv, only for bmp 转换为rgb格式,仅适用于bmp格式*/
 void yuyv_to_rgb (const uint8_t *src_ptr,uint8_t *rgb_ptr,const int width, const int height)
 {
     int r,g,b;
     int y,u,v;
     int i,j;
     printf("start convert\n");
-   // printf("rgb_ptr start address:0x%x\n", (unsigned int)rgb_ptr);
+    printf("rgb_ptr start address:0x%x\n", (unsigned int)rgb_ptr);
+   /*定位到最后一行*/
     rgb_ptr=rgb_ptr+width*(height-1)*3;
     
-   // printf("rgb_ptr first address:0x%x\n", (unsigned int)rgb_ptr);
+    printf("rgb_ptr first address:0x%x\n", (unsigned int)rgb_ptr);
+    /*逐行进行转换*/
     for (i = 0; i < height; i++)
     {
+        /*每四个字节即两个像素点进行一次转换*/
+     //printf("%d: rgb_ptr  address:0x%x\n",i, (unsigned int)rgb_ptr);
       for(j=0;j<width/2;j++)
       {
-       // printf("%d line NO.%d rgb_ptr address:0x%x\n",i,j, (unsigned int)rgb_ptr);
-        
+  
+           /*取YUV三个值*/
           y = src_ptr[0];
           u = src_ptr[1];
           v = src_ptr[3];
-         
+         /*转换第一个像素点*/
           r = y +  1.042*(v-128);
           g = y - 0.34414*(u-128) - 0.71414*(v-128);
           b = y +  1.772*(u-128);
-          /*data legalized数据合法化*/
+          /*data legalized数据合法化,按bgr格式写入buf*/
 
-          *rgb_ptr++ = clip_8bit (r);               /* R */
+          *rgb_ptr++ = clip_8bit (b);               /*B*/
           *rgb_ptr++ = clip_8bit (g);               /* G */
-          *rgb_ptr++ = clip_8bit (b);               /* B */
+          *rgb_ptr++ = clip_8bit (r);               /* R*/
+          /*取第二个Y值*/
           y = src_ptr[2];
-
+          /*转换第二个像素点*/
           r = y +  1.042*(v-128);
           g = y - 0.34414*(u-128) - 0.71414*(v-128);
           b = y +  1.772*(u-128);
          /*data legalized数据合法化*/
-          *rgb_ptr++ = clip_8bit (r);               /* R */
+          *rgb_ptr++ = clip_8bit (b);               /*B*/
           *rgb_ptr++ = clip_8bit (g);               /* G */
-          *rgb_ptr++ = clip_8bit (b);               /* B */
+          *rgb_ptr++ = clip_8bit (r);               /* R*/
 
            src_ptr += 4;//源指针指向下一yuv点
       }
-      rgb_ptr=rgb_ptr-width*4+1;
+      rgb_ptr=rgb_ptr-width*3*2;
      // printf("next  line  rgb_ptr address:0x%x\n", (unsigned int)rgb_ptr);
     }
 }
