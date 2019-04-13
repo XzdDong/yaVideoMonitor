@@ -28,7 +28,7 @@
 #define BUFFER_COUNT 4
 #define clip_8bit(val) ((val) < 0 ? 0 : (val) > 255 ? 255 : (val))
 
-
+/*cur  branch */
 #pragma pack(1)
 
 typedef struct BmpFileHeader{
