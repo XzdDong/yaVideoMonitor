@@ -1,3 +1,9 @@
+/*****************************************************************************
+File name: camera.c
+Description: 
+Author: xzdong
+Date: 2019年5月9日 21:08:25
+*****************************************************************************/
 
 #include "camera.h"
  
@@ -14,14 +20,16 @@ BmpFileHeader bf;
 
 VideoBuffer *framebuf;
 uint8_t rgb_frame_buffer[VIDEO_WIDTH*VIDEO_HEIGHT*3];
+uint8_t *jpeg_frame_buffer;
 
 int main()
 {
 	printf("_____Camera Test______\n");
     int i, ret;  
-    FILE *fp,*bmp;
+    FILE *fp,*jpeg_fp;
     /* 打开摄像头设备*/
     int fd;
+    int jpeg_size;
     fd = open(CAMERA_DEVICE,O_RDWR, 0);
     if (fd < 0) {
         perror("Open\n");
@@ -29,10 +37,13 @@ int main()
     }
     struct v4l2_requestbuffers reqbuf;//请求内存结构体
     struct v4l2_buffer buf;//缓冲区结构体
+
+    //char *jpeg_frame_buffer_pt=jpeg_frame_buffer;
    
    
 #ifdef BMP_FILE
     //Set BITMAPHEADER
+     FILE *bmp;
     bmp_head_init(&bf,&bi,VIDEO_WIDTH,VIDEO_HEIGHT);
 #endif
     v4l2_driver_info_get(fd);
@@ -47,10 +58,15 @@ int main()
     v4l2_steamon(fd);
     
    /*打开存储文件*/
-    if ((fp = fopen(MJPG_FILE, "wb"))==NULL) {
-        perror("open frame-data-file failed");
+    if ((fp = fopen(CAPTURE_FILE, "wb"))==NULL) {
+        perror("open frame-data-file failed\n");
         return -1;
     }
+     if ((jpeg_fp = fopen(JPEG_FILE, "wb"))==NULL) {
+        perror("open jpeg file  failed\n");
+        return -1;
+    }
+
 #ifdef BMP_FILE
     /*打开bmp存储文件*/
     if ((bmp = fopen(BMP_FILE, "wb"))==NULL) {
@@ -63,8 +79,15 @@ int main()
      //内存空间出队列
     ioctl(fd, VIDIOC_DQBUF, &buf);
     printf("buf length:%d  bytesused:%d\n",buf.length,buf.bytesused);
-    fwrite(framebuf[buf.index].start, buf.bytesused, 1, fp);
+    fwrite(framebuf[buf.index].start, buf.bytesused, 1, fp);//原始数据写入fp文件中
     printf("save one frame success.\n"); //CAPTURE_FILE
+    printf("jpeg buf address:%p\n",jpeg_frame_buffer);
+    jpeg_size=compress_yuyv_to_jpeg(framebuf[buf.index].start,&jpeg_frame_buffer,80,jpeg_fp); //压缩为jpeg格式，压缩质量为80
+    printf("jpeg buf address:%p\n",jpeg_frame_buffer);
+    printf("compress yuyv to jpeg successfully!   size:%d\n",jpeg_size);
+    fwrite(jpeg_frame_buffer,jpeg_size,1,jpeg_fp);//写入到jpeg文件中
+   
+    printf("save one  jpeg frame\n");
     
 #ifdef BMP_FILE
     yuyv_to_rgb(framebuf[buf.index].start,rgb_frame_buffer,VIDEO_WIDTH,VIDEO_HEIGHT);
@@ -74,6 +97,7 @@ int main()
     fwrite(rgb_frame_buffer, bi.biSizeImage, 1, bmp);
     printf("save bmp file  success\n"); 
 #endif
+
 
 
     /* 内存重新入队列*/
@@ -87,9 +111,12 @@ int main()
         munmap(framebuf[i].start, framebuf[i].length);
     }
 
+
     /*关闭设备*/
+    free(jpeg_frame_buffer);
     close(fd);
     fclose(fp);
+    fclose(jpeg_fp);
     return 0;
 }
 #ifdef BMP_FILE
@@ -279,8 +306,18 @@ int v4l2_steamon(int fd){
       return 0;
 }
 
-/*convert yuyv yto rgb yuyv, only for bmp 转换为rgb格式,仅适用于bmp格式*/
-void yuyv_to_rgb (const uint8_t *src_ptr,uint8_t *rgb_ptr,const int width, const int height)
+/*************************************************
+Function: yuyv_to_bgr
+Description: 转化yuyv为bgr格式，由下至上，即yuyv最后一行为bgr首行
+Input: const uint8_t *src_ptr   源buf指针   
+    const int width  图像宽度
+    const int height  图像高度
+Output: uint8_t *rgb_ptr 输出buf指针
+Return: void
+Others: convert yuyv yto rgb yuyv, only for bmp 转换为bgr,仅适用于bmp格式
+*************************************************/
+
+void yuyv_to_bgr (const uint8_t *src_ptr,uint8_t *rgb_ptr,const int width, const int height)
 {
     int r,g,b;
     int y,u,v;
@@ -329,51 +366,100 @@ void yuyv_to_rgb (const uint8_t *src_ptr,uint8_t *rgb_ptr,const int width, const
      // printf("next  line  rgb_ptr address:0x%p\n", rgb_ptr);
     }
 }
-uint32_t yuv420sp_to_jpg(int width, int height, unsigned char *inputYuv,unsigned char *outJpeg)
+
+
+
+/*************************************************
+Function: compress_yuyv_to_jpeg
+Description: 压缩yuyv为jpeg格式
+Input: unsigned char *src_ptr    源buf指针
+        unsigned char *outbuffer 输出buf指针
+        int quality   压缩质量参数，范围0-100
+
+Output: unsigned char *outbuffer 输出buf指针
+       FILE *jpegfile 输出文件
+Return: 返回压缩大小
+Others: // 其它说明
+*************************************************/
+
+int compress_yuyv_to_jpeg(unsigned char *src_ptr,unsigned char **outbuffer, int quality,FILE *jpegfile)
 {
-	struct jpeg_compress_struct cinfo;
-	struct jpeg_error_mgr jerr;
-	JSAMPROW row_pointer[1];
-	int i = 0, j = 0;
-	unsigned char *pY, *pU, *pV;
-	unsigned char yuvbuf[width * 3];
-	unsigned long outSize;
-	cinfo.err = jpeg_std_error(&jerr);//用于错误信息
-	jpeg_create_compress(&cinfo);  //初始化压缩对象
-	jpeg_mem_dest(&cinfo, &outJpeg, &outSize);
-	cinfo.image_width = width;//设置输入图片宽度
-	cinfo.image_height = height;//设置图片高度
-	cinfo.input_components = 3;
-	cinfo.in_color_space = JCS_YCbCr;//设置输入图片的格式，支持RGB/YUV/YCC等等
-	cinfo.dct_method = JDCT_FLOAT;
-	jpeg_set_defaults(&cinfo);//其它参数设置为默认的！
-	jpeg_set_quality(&cinfo, 40, TRUE);//设置转化图片质量，范围0-100
-	jpeg_start_compress(&cinfo, TRUE);
-	pY = inputYuv ;
-	pU = inputYuv +1 ;
-	pV = inputYuv + 3;
-	j = 1;
-	while (cinfo.next_scanline < cinfo.image_height) {
-		int index = 0;
-		for (i = 0; i < width; i += 2){//输入的YUV图片格式为标准的YUV444格式，所以需要把YUV420转化成YUV444.
-			yuvbuf[index++] = *pY;
-			yuvbuf[index++] = *pU;
-			yuvbuf[index++] = *pV;
-			pY += 2;
-			yuvbuf[index++] = *pY;
-			yuvbuf[index++] = *pU;
-			yuvbuf[index++] = *pV;
-			pY += 2;
-			pU += 4;
-			pV += 4;
-		}
-		row_pointer[0] = yuvbuf;
-		(void)jpeg_write_scanlines(&cinfo, row_pointer, 1);//单行图片转换压缩
-		j++;
-	}
-	jpeg_finish_compress(&cinfo);
-	jpeg_destroy_compress(&cinfo);
-	return (uint32_t)outSize;
+    struct jpeg_compress_struct cinfo;      //压缩结构体
+    struct jpeg_error_mgr jerr;             //错误信息
+    JSAMPROW row_pointer[1];
+    unsigned char *line_buffer, *yuyv;      //buf
+    int z;
+    static long unsigned int outSize;
+   // unsigned char *outbuffer=NULL;
+    line_buffer = calloc(VIDEO_WIDTH*3, 1);
+    yuyv = src_ptr;
+
+    cinfo.err = jpeg_std_error(&jerr);      //错误信息
+    jpeg_create_compress(&cinfo);       //创建压缩对象
+    printf("jpeg cinfo created\n");
+   //jpeg_stdio_dest(&cinfo, jpegfile);  //输出到文件
+    jpeg_mem_dest(&cinfo, outbuffer, &outSize);//输出到目标内存
+    printf("outbuffer pt address:%p\n outbuffer address:%p \n",outbuffer,*outbuffer);
+    cinfo.image_width = VIDEO_WIDTH;        //设置宽度
+    cinfo.image_height = VIDEO_HEIGHT;      //设置高度
+    cinfo.input_components = 3;
+    cinfo.in_color_space = JCS_RGB;         //设置输入图片格式，支持RGB，YUV等等，YUYV需要进行转换
+
+    jpeg_set_defaults(&cinfo);              //其他参数为默认
+    jpeg_set_quality(&cinfo, quality, TRUE);  //设置转化图片质量 0-100
+
+    jpeg_start_compress(&cinfo, TRUE);      //开始压缩
+
+    z = 0;
+    /*转换为rgb*/
+    int r, g, b;
+    int y, u, v;
+    while(cinfo.next_scanline < VIDEO_HEIGHT) {
+        int j;
+        unsigned char *rgb_ptr = line_buffer;
+        for(j=0;j<VIDEO_WIDTH/2;j++)
+      {
+  
+           /*取YUV三个值*/
+          y = src_ptr[0];
+          u = src_ptr[1];
+          v = src_ptr[3];
+         /*转换第一个像素点*/
+          r = y +  1.042*(v-128);
+          g = y - 0.34414*(u-128) - 0.71414*(v-128);
+          b = y +  1.772*(u-128);
+          /*data legalized数据合法化,按bgr格式写入buf*/
+
+          *rgb_ptr++ = clip_8bit (r);               /*R*/
+          *rgb_ptr++ = clip_8bit (g);               /* G */
+          *rgb_ptr++ = clip_8bit (b);               /* B*/
+          /*取第二个Y值*/
+          y = src_ptr[2];
+          /*转换第二个像素点*/
+          r = y +  1.042*(v-128);
+          g = y - 0.34414*(u-128) - 0.71414*(v-128);
+          b = y +  1.772*(u-128);
+         /*data legalized数据合法化*/
+          *rgb_ptr++ = clip_8bit (r);               /*R*/
+          *rgb_ptr++ = clip_8bit (g);               /* G */
+          *rgb_ptr++ = clip_8bit (b);               /* B*/
+
+           src_ptr += 4;//源指针指向下一yuv点
+      }
+
+
+        row_pointer[0] = line_buffer;
+        jpeg_write_scanlines(&cinfo, row_pointer, 1);//单行图片压缩
+    }
+   // dest_ptr=malloc(outSize);
+    //memcpy(dest_ptr,outbuffer,outSize);
+
+    jpeg_finish_compress(&cinfo);//结束压缩
+    jpeg_destroy_compress(&cinfo);//摧毁压缩
+
+    free(line_buffer);//释放资源
+   
+    return (outSize);//返回压缩大小
 }
 
 
