@@ -1,17 +1,21 @@
 CC=gcc
 CFLAGES= -Wall -O2  
-OBJSDIR=obj
+OBJDIR=obj
 TARGET=camera
-OBJS=camera.o
-SRC=$(OBJS:o=c)
+#SRC = $(wildcard *.c)
+#OBJ = $(patsubst %.c,${OBJDIR}/%.o,$(notdir ${SRC})) 
+SRC = v4l2_ctr.c bmp.c jpeg.c camera.c httpd.c
+OBJ = $(SRC:.c=.o) 
+
 RM=rm -f
+JPEGLIB=./jpeg-ubuntu/lib
+$(info SRC:$(SRC))
+$(TARGET):$(OBJ)
+	$(CC) $(CFLAGES) -L $(JPEGLIB)  -o $(TARGET) $(OBJ) -ljpeg -lpthread
 
-$(TARGET):$(OBJSDIR) $(OBJS)
-	$(CC) $(CFLAGES) -L ./jpeg-ubuntu/lib -o $(TARGET) $(OBJSDIR)/*.o -ljpeg 
-
-$(OBJS):$(SRC)
-	$(CC) $(CFLAGES) -c $(SRC) -o $(OBJSDIR)/$@ 
+%.o:%.cpp
+	$(CC) $(CFLAGES) -c $< -o $@ 
 
 clean:
 	-$(RM) $(TARGET)
-	-$(RM) $(OBJSDIR)/*.o
+	-$(RM) $(OBJDIR)/*.o
