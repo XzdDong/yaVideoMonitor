@@ -34,10 +34,18 @@
 
 #define VIDEO_WIDTH 640
 #define VIDEO_HEIGHT 480
-#define BUFFER_COUNT 4
+#define BUFFER_COUNT 5
 #define V4L2_PIX_FMT V4L2_PIX_FMT_YUYV//V4L2_PIX_FMT_YUYV
 
-#define FRAME_NUM 1
+extern uint8_t *jpeg_frame_buffer;
+extern int jpeg_size;
+extern int fd;
+extern struct v4l2_requestbuffers reqbuf;//请求内存结构体
+extern struct v4l2_buffer v4l2buf;//缓冲区结构体
+extern VideoBuffer *framebuf;
+extern struct CameraInfo mycamera;
+
+void http_thread(void *arg);
 
 
 

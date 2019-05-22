@@ -22,7 +22,7 @@ Others: // 其它说明
 
 
 
-int compress_yuyv_to_jpeg(uint8_t *src_ptr,uint8_t **outbuffer, int quality,FILE *jpegfile,const int width,const int height)
+int compress_yuyv_to_jpeg(uint8_t *src_ptr,uint8_t **outbuffer, int quality,const int width,const int height)
 {
     struct jpeg_compress_struct cinfo;      //压缩结构体
     struct jpeg_error_mgr jerr;             //错误信息
@@ -30,18 +30,19 @@ int compress_yuyv_to_jpeg(uint8_t *src_ptr,uint8_t **outbuffer, int quality,FILE
     unsigned char *line_buffer, *yuyv;      //buf
     int z;
     static long unsigned int outSize;
-   // unsigned char *outbuffer=NULL;
+  
     line_buffer = calloc(width*3, 1);
     yuyv = src_ptr;
 
     cinfo.err = jpeg_std_error(&jerr);      //错误信息
-    jpeg_create_compress(&cinfo);       //创建压缩对象
+    jpeg_create_compress(&cinfo);           //创建压缩对象
     printf("jpeg cinfo created\n");
-   //jpeg_stdio_dest(&cinfo, jpegfile);  //输出到文件
-    jpeg_mem_dest(&cinfo, outbuffer, &outSize);//输出到目标内存
-    printf("outbuffer pt address:%p\n outbuffer address:%p \n",outbuffer,*outbuffer);
-    cinfo.image_width = width;        //设置宽度
-    cinfo.image_height = height;      //设置高度
+   //jpeg_stdio_dest(&cinfo, jpegfile);    //输出到文件
+    jpeg_mem_dest(&cinfo, outbuffer, &outSize);//输出到目标内存，动态分配outbuffer内存空间
+    //printf("outbuffer pt address:%p\n outbuffer address:%p \n",outbuffer,*outbuffer);
+    //printf("width:%d\n height:%d \n",width,height);
+    cinfo.image_width = width;             //设置宽度
+    cinfo.image_height = height;           //设置高度
     cinfo.input_components = 3;
     cinfo.in_color_space = JCS_RGB;         //设置输入图片格式，支持RGB，YUV等等，YUYV需要进行转换
 

@@ -7,6 +7,7 @@ Author: xzdong
 
 #include "httpd.h"
 
+#include "camera.h"
 
 /*************************************************
 Function: server_init()
@@ -90,7 +91,9 @@ int process_server(void *client_fd){
     int client_sock=*(int*)client_fd;
     /*解析http请求*/
     printf("client sock :%d\n",client_sock);
+
     http_req_parse(client_sock);
+
     
 
 }
@@ -114,6 +117,7 @@ int http_req_parse(int client){
     char *query_thing=NULL;
     int cgi = 0;
     /*接收数据*/
+    char sendbuf[65535];
     charnum=get_line(client,buf,sizeof(buf));//读取一行数据到buf
     printf("charnum:%d\n",charnum);
     /*读取method*/
@@ -160,11 +164,61 @@ int http_req_parse(int client){
 
     }
 
-    /*静态请求，发送静态网页
-    动态请求，执行cgi程序*/
-    if(!cgi){
-       send_file(client,path); 
+    /*multipart/x-mixed-replace用于服务器推送server push和HTTP流 stream*/
+     sprintf(buf, "HTTP/1.1 200 OK\r\n" \
+            STD_HEADER \
+            "Content-Type: multipart/x-mixed-replace;boundary=" BOUNDARY "\r\n" \
+            "\r\n" \
+            "--" BOUNDARY "\r\n");
 
+    if(write(client, buf, strlen(buf)) < 0) {
+        return 0;
+    }
+
+      for(;;) { 
+           // printf("sendjpegbuf\n");
+           //内存空间出队列
+            ioctl(fd, VIDIOC_DQBUF, &v4l2buf);
+
+           printf("jpeg buf index%d\n",v4l2buf.index);
+            //sprintf(name,"./%d.jpg",v4l2buf.index);
+           jpeg_size=compress_yuyv_to_jpeg(framebuf[v4l2buf.index].start,&jpeg_frame_buffer,80,mycamera.width,mycamera.height); //压缩为jpeg格式，压缩质量为80
+           printf("jpeg addr:%p\n",jpeg_frame_buffer);
+           
+           printf("jpeg size:%d\n",jpeg_size);
+    
+            /* 内存重新入队列*/
+          // memcpy(sendbuf,jpeg_frame_buffer,jpeg_size);
+             
+           send_jpeg_frame(client,jpeg_frame_buffer,jpeg_size);
+           //free(jpeg_frame_buffer);
+         
+            ioctl(fd, VIDIOC_QBUF, &v4l2buf);
+           // sleep(1);
+        }
+   
+
+    /*//静态请求，发送静态网页
+  //  动态请求，执行cgi程序/
+    if(!cgi){
+      
+        while(1) { 
+            printf("sendjpegbuf\n");
+           //内存空间出队列
+            ioctl(fd, VIDIOC_DQBUF, &v4l2buf);
+            jpeg_size=compress_yuyv_to_jpeg(framebuf[v4l2buf.index].start,&jpeg_frame_buffer,80,mycamera.width,mycamera.height); //压缩为jpeg格式，压缩质量为80
+            printf("jpeg addr:%p\n",jpeg_frame_buffer);
+            printf("jpeg size:%d\n",jpeg_size);
+            //内存重新入队列
+            
+            ioctl(fd, VIDIOC_QBUF, &v4l2buf);
+            send_jpegbuf(client,jpeg_frame_buffer,jpeg_size);
+           // sleep(1);
+        }
+   
+      
+      
+      // send_file(client,path);
 
     }
     else
@@ -172,7 +226,7 @@ int http_req_parse(int client){
         
 
 
-    }
+    }*/
 
 
 
@@ -204,7 +258,7 @@ int send_error(int client,int error){
     
     sprintf(buf,"HTTP/1.1 %d %s\r\n" \
                "Content-Type:text/html\r\n" \
-               "Server:yaVideoMonitor\r\n"\
+               STD_HEADER\
                 "\r\n"
         ,error,error_str);
     
@@ -253,9 +307,9 @@ int send_file(int client,char *path){
         perror("server send");
         return -1;
     }
-    sprintf(buf,"HTTP/1.1 201 OK\r\n" \
-               "Content-Type:text/html \r\n" \
-               "Server:yaVideoMonitor\r\n"\
+    sprintf(buf,"HTTP/1.1 201 OK\r\n"\
+               "Content-Type:jpeg \r\n"\
+               STD_HEADER\
                "\r\n"
        );
     send(client,buf,strlen(buf),0);
@@ -264,6 +318,28 @@ int send_file(int client,char *path){
     sendfile(client,fd,0,st.st_size);
     close(fd);  
 }
+int send_jpeg_frame(int client,char *jpegbuf,const int size){
+    
+    char buf[255];
+    struct timeval timestamp;
+      
+
+    gettimeofday(&timestamp,NULL);
+    sprintf(buf,"Content-Type:image/jpeg \r\n"\
+               "Content-Length: %d\r\n"\
+               "X-Timestamp: %d.%06d\r\n"\
+               STD_HEADER\
+               "\r\n"
+       ,size,(int)timestamp.tv_sec,(int)timestamp.tv_usec);
+   if( write(client,buf,strlen(buf))<0)
+        perror("send buf");
+    if(write(client,jpegbuf,size)<0)
+         perror("send jpegbuf");
+    sprintf(buf, "\r\n--" BOUNDARY "\r\n");//BOUNDARY边界以区分两帧图片
+    send(client, buf, strlen(buf),0);
+  
+}
+
 /*************************************************
 Function: get_line
 Description: 从socket获得一行数据

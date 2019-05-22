@@ -24,7 +24,7 @@
 
 #define clip_8bit(val) (val) < 0 ? 0 :( (val) > 255 ? 255 : (val) )
 
-int compress_yuyv_to_jpeg(uint8_t *src_ptr,uint8_t **outbuffer, int quality,FILE *jpegfile,const int width,const int height);
+int compress_yuyv_to_jpeg(uint8_t *src_ptr,uint8_t **outbuffer, int quality,const int width,const int height);
 
 
 

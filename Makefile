@@ -18,4 +18,5 @@ $(TARGET):$(OBJ)
 
 clean:
 	-$(RM) $(TARGET)
+	-$(RM) *.jpg
 	-$(RM) $(OBJDIR)/*.o
