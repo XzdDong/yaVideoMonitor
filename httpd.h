@@ -37,7 +37,7 @@ int my_send(int fd,char *sendbuf);
 int my_recv(int fd,char *recvmsg);
 int send_error(int client,int error);
 int send_file(int client,char *path);
-int send_jpeg_frame(int client,char *jpegbuf,int size);
+int send_jpeg_frame(int client,uint8_t *jpegbuf,int size);
 
 
 

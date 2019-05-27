@@ -27,12 +27,11 @@ int compress_yuyv_to_jpeg(uint8_t *src_ptr,uint8_t **outbuffer, int quality,cons
     struct jpeg_compress_struct cinfo;      //压缩结构体
     struct jpeg_error_mgr jerr;             //错误信息
     JSAMPROW row_pointer[1];
-    unsigned char *line_buffer, *yuyv;      //buf
-    int z;
+    unsigned char *line_buffer;      //buf
     static long unsigned int outSize;
   
     line_buffer = calloc(width*3, 1);
-    yuyv = src_ptr;
+
 
     cinfo.err = jpeg_std_error(&jerr);      //错误信息
     jpeg_create_compress(&cinfo);           //创建压缩对象
@@ -51,7 +50,6 @@ int compress_yuyv_to_jpeg(uint8_t *src_ptr,uint8_t **outbuffer, int quality,cons
 
     jpeg_start_compress(&cinfo, TRUE);      //开始压缩
 
-    z = 0;
     /*转换为rgb*/
     int r, g, b;
     int y, u, v;

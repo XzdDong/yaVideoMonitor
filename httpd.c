@@ -29,7 +29,7 @@ int server_init( struct sockaddr_in *server_addr,struct sockaddr_in *client_addr
         exit(-1); 
     }
     printf("sever socket fd:%d\n",server_fd);
-    bzero(server_addr,sizeof(server_addr)); 
+    bzero(server_addr,sizeof(struct sockaddr_in)); 
     server_addr->sin_family = AF_INET;
     (server_addr->sin_addr).s_addr = htonl(INADDR_ANY);
     server_addr->sin_port = htons(PORT); 
@@ -60,7 +60,7 @@ Others:
 
 int accept_loop(int server_fd,struct sockaddr_in *client_addr,int *client_fd,pthread_t pthread_id){
 
-    static int peer_addr_size; 
+    static socklen_t peer_addr_size; 
 
     while(1){
         peer_addr_size=sizeof(struct sockaddr);
@@ -93,6 +93,7 @@ int process_server(void *client_fd){
     printf("client sock :%d\n",client_sock);
 
     http_req_parse(client_sock);
+    return 1;
 
     
 
@@ -117,7 +118,7 @@ int http_req_parse(int client){
     char *query_thing=NULL;
     int cgi = 0;
     /*接收数据*/
-    char sendbuf[65535];
+    //char sendbuf[65535];
     charnum=get_line(client,buf,sizeof(buf));//读取一行数据到buf
     printf("charnum:%d\n",charnum);
     /*读取method*/
@@ -164,6 +165,12 @@ int http_req_parse(int client){
 
     }
 
+
+    //静态请求，发送静态网页
+  //  动态请求，执行cgi程序/
+    if(!cgi){
+      
+        
     /*multipart/x-mixed-replace用于服务器推送server push和HTTP流 stream*/
      sprintf(buf, "HTTP/1.1 200 OK\r\n" \
             STD_HEADER \
@@ -197,25 +204,6 @@ int http_req_parse(int client){
            // sleep(1);
         }
    
-
-    /*//静态请求，发送静态网页
-  //  动态请求，执行cgi程序/
-    if(!cgi){
-      
-        while(1) { 
-            printf("sendjpegbuf\n");
-           //内存空间出队列
-            ioctl(fd, VIDIOC_DQBUF, &v4l2buf);
-            jpeg_size=compress_yuyv_to_jpeg(framebuf[v4l2buf.index].start,&jpeg_frame_buffer,80,mycamera.width,mycamera.height); //压缩为jpeg格式，压缩质量为80
-            printf("jpeg addr:%p\n",jpeg_frame_buffer);
-            printf("jpeg size:%d\n",jpeg_size);
-            //内存重新入队列
-            
-            ioctl(fd, VIDIOC_QBUF, &v4l2buf);
-            send_jpegbuf(client,jpeg_frame_buffer,jpeg_size);
-           // sleep(1);
-        }
-   
       
       
       // send_file(client,path);
@@ -226,8 +214,8 @@ int http_req_parse(int client){
         
 
 
-    }*/
-
+    }
+    return 1;
 
 
 
@@ -274,12 +262,13 @@ int send_error(int client,int error){
 
                 );
         send(client,buf,strlen(buf),0);
-        return -1;
+        return 0;
     }
     fstat(fd, &st);
    
     sendfile(client,fd,0,st.st_size);
     close(fd);
+    return 1;
     
 
 }
@@ -305,7 +294,7 @@ int send_file(int client,char *path){
     if(fd < 0){
         send_error(client,404);
         perror("server send");
-        return -1;
+        return 0;
     }
     sprintf(buf,"HTTP/1.1 201 OK\r\n"\
                "Content-Type:jpeg \r\n"\
@@ -316,9 +305,10 @@ int send_file(int client,char *path){
     fstat(fd, &st);
     printf("file size:%ld\n",st.st_size);
     sendfile(client,fd,0,st.st_size);
-    close(fd);  
+    close(fd); 
+    return 1;
 }
-int send_jpeg_frame(int client,char *jpegbuf,const int size){
+int send_jpeg_frame(int client,uint8_t *jpegbuf,const int size){
     
     char buf[255];
     struct timeval timestamp;
@@ -337,6 +327,7 @@ int send_jpeg_frame(int client,char *jpegbuf,const int size){
          perror("send jpegbuf");
     sprintf(buf, "\r\n--" BOUNDARY "\r\n");//BOUNDARY边界以区分两帧图片
     send(client, buf, strlen(buf),0);
+    return 1;
   
 }
 

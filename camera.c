@@ -40,7 +40,7 @@ CameraInfo mycamera;
 int main()
 {
 	printf("_____Camera Test______\n");
-    int i, ret;  
+    int i;  
     FILE *fp,*jpeg_fp;
    
     int server_sock;
