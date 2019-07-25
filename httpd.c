@@ -29,7 +29,7 @@ int server_init( struct sockaddr_in *server_addr,struct sockaddr_in *client_addr
         exit(-1); 
     }
     printf("sever socket fd:%d\n",server_fd);
-    bzero(server_addr,sizeof(server_addr)); 
+    bzero(server_addr,sizeof(struct sockaddr_in)); 
     server_addr->sin_family = AF_INET;
     (server_addr->sin_addr).s_addr = htonl(INADDR_ANY);
     server_addr->sin_port = htons(PORT); 
@@ -60,8 +60,10 @@ Others:
 
 int accept_loop(int server_fd,struct sockaddr_in *client_addr,int *client_fd,pthread_t pthread_id){
 
-    static int peer_addr_size; 
      void* threadval;
+
+    static socklen_t peer_addr_size; 
+
 
     peer_addr_size=sizeof(struct sockaddr);
 
@@ -94,6 +96,7 @@ int process_server(void *client_fd){
     int client_sock=*(int*)client_fd;
     /*解析http请求*/      
     http_req_parse(client_sock);
+
            //sleep(1);
            //printf("close: %d\n",client_sock);
            //close(client_sock);
@@ -132,40 +135,39 @@ int http_req_parse(int client){
              break;
          }
         
-        if((p_info=strstr(buf,"GET"))==NULL){
-            continue;
-        }
-        p_info+=(strlen("GET"));
-          while(isspace((int)*p_info)) p_info++;
-            while(!isspace((int)*p_info) && i<sizeof(url)){
-                   url[i] = *p_info;
-                   i++;
-                   p_info++;
-            } 
-        url[i] = '\0';
-        
-       
-        if(strcmp(url,"/")==0){
-            strcpy(url,"/index.html");
-        }
-        if(strstr(url,"?stream")){
-            printf("send stream  to %d\n",client);
-            send_stream(client);
-        }
-        else{ 
-            sprintf(path,"%s%s",WEB_PATH,url); 
-            printf("path:%s\n",path);
-            printf("send file  to %d\n",client);
-           if(send_file(client,path)) {
-                printf("send file completed\n");
-               // return 0;
+        if((p_info=strstr(buf,"GET"))==NULL) continue;
+
+        else{
+            p_info+=(strlen("GET"));
+                while(isspace((int)*p_info)) p_info++;
+                while(!isspace((int)*p_info) && i<sizeof(url)){
+                       url[i] = *p_info;
+                       i++;
+                       p_info++;
+                } 
+           url[i] = '\0';
+           if(strcmp(url,"/")==0){
+                strcpy(url,"/index.html");
             }
-        }
-        i=0;
+            if(strstr(url,"?stream")){
+                printf("send stream  to %d\n",client);
+                send_stream(client);
+            }
+            else{ 
+                sprintf(path,"%s%s",WEB_PATH,url); 
+                printf("path:%s\n",path);
+                printf("send file  to %d\n",client);
+               if(send_file(client,path)) {
+                    printf("send file completed\n");
+                   // return 0;
+                }
+            }
+            i=0;
         
+        }
     }
 
-
+    return 1;
 
 }
 /*************************************************
@@ -192,6 +194,7 @@ int send_error(int client,int error){
         case 501:strcpy(error_str,"Not Implemented");break;
         default:break;
         }
+    sprintf(error_file_path,"%s/%d.html",ERROR_PATH,error);
     fd = open(error_file_path,0,'r');  
     if(fd < 0){
         memset(buf,0,sizeof(buf));        
@@ -205,9 +208,10 @@ int send_error(int client,int error){
 
                 );
         send(client,buf,strlen(buf),0);
-        return -1;
+        return 0;
     }
     fstat(fd, &st);
+
     sprintf(buf,"HTTP/1.1 %d %s\r\n" \
                "Content-Type:text/html\r\n" \
                STD_HEADER\
@@ -215,10 +219,9 @@ int send_error(int client,int error){
                 "\r\n"
         ,error,error_str,st.st_size);  
     send(client,buf,strlen(buf),0);
-    sprintf(error_file_path,"%s/%d.html",ERROR_PATH,error);
-    
+  
     if(sendfile(client,fd,0,st.st_size)==-1){
-        perror("sendfile");
+        perror("send error file");
         return 0;
     }
     close(fd); 
@@ -235,10 +238,10 @@ int send_file(int client,char *path){
     if(fd < 0){
         send_error(client,404);
         perror("server send");
-        return -1;
+        return 0;
     }
     fstat(fd, &st);
-   
+
     /* determine mime-type */
     for(int i = 0; i < sizeof(mimetypes)/sizeof(mimetypes[0]) ; i++) {
    
@@ -311,8 +314,9 @@ int send_stream(int client){
 
 }
 
-int send_jpeg_frame(int client,char *jpegbuf,const int size){
-    
+
+int send_jpeg_frame(int client,uint8_t *jpegbuf,const int size){
+
     char buf[255];
     struct timeval timestamp;
       
@@ -330,6 +334,7 @@ int send_jpeg_frame(int client,char *jpegbuf,const int size){
          perror("send jpegbuf");
     sprintf(buf, "\r\n--" BOUNDARY "\r\n");//BOUNDARY边界以区分两帧图片
     send(client, buf, strlen(buf),0);
+    return 1;
   
 }
 

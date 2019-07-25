@@ -47,6 +47,7 @@ typedef struct CameraInfo{
     int    height;
     int buffer_count;
     uint32_t pix_format;
+    
     enum v4l2_field field;
     
 }CameraInfo;

@@ -40,7 +40,7 @@ CameraInfo mycamera;
 int main()
 {
 	printf("_____Camera Test______\n");
-    int i, ret;  
+    int i;  
     FILE *fp,*jpeg_fp;
    
     int server_sock;
@@ -103,24 +103,6 @@ int main()
     }
 #endif
 
-//    for(i=0;i<FRAME_NUM;i++)
- /*   while(1)
-    {
-     //内存空间出队列
-    ioctl(fd, VIDIOC_DQBUF, &buf);
-   printf("buf length:%d  bytesused:%d\n",buf.length,buf.bytesused);
-    fwrite(framebuf[buf.index].start, buf.bytesused, 1, fp);//原始数据写入fp文件中
-   printf("save one frame success.\n"); //CAPTURE_FILE
-    printf("jpeg buf address:%p\n",jpeg_frame_buffer);
-    jpeg_size=compress_yuyv_to_jpeg(framebuf[buf.index].start,&jpeg_frame_buffer,80,jpeg_fp,mycamera.width,mycamera.height); //压缩为jpeg格式，压缩质量为80
-    printf("jpeg buf address:%p\n",jpeg_frame_buffer);
-    printf("compress yuyv to jpeg successfully!   size:%d\n",jpeg_size);
-    fwrite(jpeg_frame_buffer,jpeg_size,1,jpeg_fp);//写入到jpeg文件中
-
-    printf("save one  jpeg frame\n");
-    //内存重新入队列
-    ret = ioctl(fd, VIDIOC_QBUF, &buf);
-    }*/
 
      pthread_create(&http_pid,NULL,(void*)&http_thread,(void*)&server_sock);
      pthread_join(http_pid,&threadval);
