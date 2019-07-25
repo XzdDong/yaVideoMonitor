@@ -36,7 +36,7 @@ int compress_yuyv_to_jpeg(uint8_t *src_ptr,uint8_t **outbuffer, int quality,cons
 
     cinfo.err = jpeg_std_error(&jerr);      //错误信息
     jpeg_create_compress(&cinfo);           //创建压缩对象
-    printf("jpeg cinfo created\n");
+    //printf("jpeg cinfo created\n");
    //jpeg_stdio_dest(&cinfo, jpegfile);    //输出到文件
     jpeg_mem_dest(&cinfo, outbuffer, &outSize);//输出到目标内存，动态分配outbuffer内存空间
     //printf("outbuffer pt address:%p\n outbuffer address:%p \n",outbuffer,*outbuffer);

@@ -6,7 +6,7 @@ Date: 2019年5月10日 20:20:55
 *****************************************************************************/
 
 #include "camera.h"
- 
+
 #ifdef BMP_FILE
 
 /*初始化bmp文件格式结构体*/
@@ -16,7 +16,7 @@ BmpFileHeader bf;
 
 #endif
 pthread_t pthread_id[10];
-static int client_sock[10];
+static int client_sock[20];
 static int client_sock_num=0;
 pthread_t http_pid;
 struct sockaddr_in server_addr;
@@ -44,6 +44,7 @@ int main()
     FILE *fp,*jpeg_fp;
    
     int server_sock;
+    void* threadval;
   //  CameraInfo mycamera;
 
     
@@ -115,13 +116,14 @@ int main()
     printf("jpeg buf address:%p\n",jpeg_frame_buffer);
     printf("compress yuyv to jpeg successfully!   size:%d\n",jpeg_size);
     fwrite(jpeg_frame_buffer,jpeg_size,1,jpeg_fp);//写入到jpeg文件中
-   
+
     printf("save one  jpeg frame\n");
     //内存重新入队列
     ret = ioctl(fd, VIDIOC_QBUF, &buf);
     }*/
 
      pthread_create(&http_pid,NULL,(void*)&http_thread,(void*)&server_sock);
+     pthread_join(http_pid,&threadval);
      while(1){
         //printf("main thread\n");
 
@@ -145,15 +147,16 @@ int main()
 }
 void http_thread(void *arg){
     int *server_sock = (int*)arg;
-    *server_sock = server_init( &server_addr,&client_addr);
-
-      if( accept_loop(*server_sock,&client_addr,&client_sock[client_sock_num],pthread_id[client_sock_num]) ){
-          client_sock_num++;
-      }
-
-
-
-
+    *server_sock = server_init(&server_addr,&client_addr);
+    while(1){
+         accept_loop(*server_sock,&client_addr,&client_sock[client_sock_num],pthread_id[client_sock_num]);
+         if(client_sock_num<20)client_sock_num++;
+         else{
+            printf("client connect beyond limted\n");
+            exit(-1);
+         }
+      
+    }
 }
 
 

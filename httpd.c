@@ -61,21 +61,23 @@ Others:
 int accept_loop(int server_fd,struct sockaddr_in *client_addr,int *client_fd,pthread_t pthread_id){
 
     static int peer_addr_size; 
+     void* threadval;
 
-    while(1){
-        peer_addr_size=sizeof(struct sockaddr);
-        *client_fd=accept(server_fd,(struct sockaddr*)client_addr,&peer_addr_size);
+    peer_addr_size=sizeof(struct sockaddr);
+
+    *client_fd=accept(server_fd,(struct sockaddr*)client_addr,&peer_addr_size);
     printf("client fd:%d\n",*client_fd);
-        if(client_fd<0){
-            perror("accept");
-            exit(-1);
-        }
-        if(pthread_create(&pthread_id,NULL,(void*)&process_server,(void*)client_fd)!=0){
-            perror("thread create"); 
-            exit(-1);
-        }
-        return 1;       
+    if(client_fd<0){
+        perror("accept");
+        exit(-1);
     }
+    if(pthread_create(&pthread_id,NULL,(void*)&process_server,(void*)client_fd)!=0){
+        perror("thread create"); 
+        exit(-1);
+    }
+    return 1;
+      // pthread_join(pthread_id,threadval);    
+
 
 }
 /*************************************************
@@ -88,14 +90,15 @@ Others:
 *************************************************/
 
 int process_server(void *client_fd){
+    printf("process server\n");
     int client_sock=*(int*)client_fd;
-    /*解析http请求*/
-    printf("client sock :%d\n",client_sock);
-
+    /*解析http请求*/      
     http_req_parse(client_sock);
-
-    
-
+           //sleep(1);
+           //printf("close: %d\n",client_sock);
+           //close(client_sock);
+    return 0;
+       
 }
 /*************************************************
 Function: http_req_parse
@@ -105,8 +108,6 @@ Output:
 Return: 
 Others:
 *************************************************/
-
-
 int http_req_parse(int client){
 
     char url[100];
@@ -115,119 +116,54 @@ int http_req_parse(int client){
     char path[255];
     int charnum,i = 0,j = 0;
     char *query_thing=NULL;
+    char *p_info=NULL;
     int cgi = 0;
     /*接收数据*/
     char sendbuf[65535];
-    charnum=get_line(client,buf,sizeof(buf));//读取一行数据到buf
-    printf("charnum:%d\n",charnum);
-    /*读取method*/
-
-    while(!isspace((int)buf[i]) && j<sizeof(method)-1 ){
-       method[j]=buf[i];
-       j++;i++;
-
-    }
-    method[j]='\0'; 
-    printf("method:%s\n",method);
-    /*跳过空格*/
-    while(isspace((int)buf[i]) && i<sizeof(buf)-1)i++;
-    /*读取url*/
-   j=0;
-    while(!isspace((int)buf[i]) && j<sizeof(url)-1){
-        url[j]=buf[i];
-        j++;i++;
-
-     }
-     url[j]='\0'; 
-    printf("url:%s\n",url);
-    /*进行方法的判断*/
-    /*如果是GET请求,提取URL中query部分*/
-    if(strcasecmp(method,"GET")==0){
-        query_thing=url;   
-        while(*query_thing!='?' && *query_thing!='\0'){
-            query_thing++;
-
-        }
-        if(*query_thing=='?'){
-            cgi=1;          //存在query请求，cgi标志置1
-            *query_thing='\0';//？处  置0
-            query_thing++; //query后移
-        }
-     
-        sprintf(path,".%s",url);//?前为路径，存储到path中
-       
-    }
-    else
-    {
-        send_error(client,501);
-
-
-    }
-
-    /*multipart/x-mixed-replace用于服务器推送server push和HTTP流 stream*/
-     sprintf(buf, "HTTP/1.1 200 OK\r\n" \
-            STD_HEADER \
-            "Content-Type: multipart/x-mixed-replace;boundary=" BOUNDARY "\r\n" \
-            "\r\n" \
-            "--" BOUNDARY "\r\n");
-
-    if(write(client, buf, strlen(buf)) < 0) {
-        return 0;
-    }
-
-      for(;;) { 
-           // printf("sendjpegbuf\n");
-           //内存空间出队列
-            ioctl(fd, VIDIOC_DQBUF, &v4l2buf);
-
-           printf("jpeg buf index%d\n",v4l2buf.index);
-            //sprintf(name,"./%d.jpg",v4l2buf.index);
-           jpeg_size=compress_yuyv_to_jpeg(framebuf[v4l2buf.index].start,&jpeg_frame_buffer,80,mycamera.width,mycamera.height); //压缩为jpeg格式，压缩质量为80
-           printf("jpeg addr:%p\n",jpeg_frame_buffer);
-           
-           printf("jpeg size:%d\n",jpeg_size);
-    
-            /* 内存重新入队列*/
-          // memcpy(sendbuf,jpeg_frame_buffer,jpeg_size);
-             
-           send_jpeg_frame(client,jpeg_frame_buffer,jpeg_size);
-           //free(jpeg_frame_buffer);
-         
-            ioctl(fd, VIDIOC_QBUF, &v4l2buf);
-           // sleep(1);
-        }
-   
-
-    /*//静态请求，发送静态网页
-  //  动态请求，执行cgi程序/
-    if(!cgi){
-      
-        while(1) { 
-            printf("sendjpegbuf\n");
-           //内存空间出队列
-            ioctl(fd, VIDIOC_DQBUF, &v4l2buf);
-            jpeg_size=compress_yuyv_to_jpeg(framebuf[v4l2buf.index].start,&jpeg_frame_buffer,80,mycamera.width,mycamera.height); //压缩为jpeg格式，压缩质量为80
-            printf("jpeg addr:%p\n",jpeg_frame_buffer);
-            printf("jpeg size:%d\n",jpeg_size);
-            //内存重新入队列
-            
-            ioctl(fd, VIDIOC_QBUF, &v4l2buf);
-            send_jpegbuf(client,jpeg_frame_buffer,jpeg_size);
-           // sleep(1);
-        }
-   
-      
-      
-      // send_file(client,path);
-
-    }
-    else
-    {
+    while(1){
+         memset(buf,0,sizeof(buf));
+         memset(buf,0,sizeof(url));
+         memset(buf,0,sizeof(path));
         
-
-
-    }*/
-
+         charnum=get_line(client,buf,sizeof(buf));//读取一行数据到buf
+         if(charnum == 0){
+             printf("client close \n");
+             close(client); //返回0 客户端关闭连接
+             break;
+         }
+        
+        if((p_info=strstr(buf,"GET"))==NULL){
+            continue;
+        }
+        p_info+=(strlen("GET"));
+          while(isspace((int)*p_info)) p_info++;
+            while(!isspace((int)*p_info) && i<sizeof(url)){
+                   url[i] = *p_info;
+                   i++;
+                   p_info++;
+            } 
+        url[i] = '\0';
+        
+       
+        if(strcmp(url,"/")==0){
+            strcpy(url,"/index.html");
+        }
+        if(strstr(url,"?stream")){
+            printf("send stream  to %d\n",client);
+            send_stream(client);
+        }
+        else{ 
+            sprintf(path,"%s%s",WEB_PATH,url); 
+            printf("path:%s\n",path);
+            printf("send file  to %d\n",client);
+           if(send_file(client,path)) {
+                printf("send file completed\n");
+               // return 0;
+            }
+        }
+        i=0;
+        
+    }
 
 
 
@@ -251,23 +187,18 @@ int send_error(int client,int error){
     memset(error_file_path,0,sizeof(error_file_path));
     switch (error)
         {
+        case 400:strcpy(error_str,"Bad Request");break;
         case 404:strcpy(error_str,"Not Found");break;
         case 501:strcpy(error_str,"Not Implemented");break;
         default:break;
         }
-    
-    sprintf(buf,"HTTP/1.1 %d %s\r\n" \
-               "Content-Type:text/html\r\n" \
-               STD_HEADER\
-                "\r\n"
-        ,error,error_str);
-    
-    send(client,buf,strlen(buf),0);
-    sprintf(error_file_path,"%s/%d.html",ERROR_PATH,error);
-    fd = open(error_file_path,0,'r');
+    fd = open(error_file_path,0,'r');  
     if(fd < 0){
-        memset(buf,0,sizeof(buf));
-        sprintf(buf,"<HTML>"\
+        memset(buf,0,sizeof(buf));        
+        sprintf(buf,"HTTP/1.1 400 Bad Request\r\n" \
+               "Content-Type:text/plain\r\n" \
+               STD_HEADER\
+                   "<HTML>"\
                          "<TITLE>SERVER ERROR</TITLE>"\
                          "<BODY>server error</BODY>"\
                    "</HTML>"
@@ -277,47 +208,109 @@ int send_error(int client,int error){
         return -1;
     }
     fstat(fd, &st);
-   
-    sendfile(client,fd,0,st.st_size);
-    close(fd);
+    sprintf(buf,"HTTP/1.1 %d %s\r\n" \
+               "Content-Type:text/html\r\n" \
+               STD_HEADER\
+               "Content-Length:%ld\r\n"\
+                "\r\n"
+        ,error,error_str,st.st_size);  
+    send(client,buf,strlen(buf),0);
+    sprintf(error_file_path,"%s/%d.html",ERROR_PATH,error);
     
-
-}
-/*
-int file_type_parse(char *path){
-    char namebuf[255];
-    char file_type;
-    char c,*cpt;
-    cpt=path;
-    
-    while(*cpt!='/' && *cpt!='\0'){
-        cpt++;
-
+    if(sendfile(client,fd,0,st.st_size)==-1){
+        perror("sendfile");
+        return 0;
     }
-   
-}*/
+    close(fd); 
+    return st.st_size;
+}
+
 int send_file(int client,char *path){
     int fd;
     char buf[255];
+    char *mimetype =NULL;
     struct stat st;
-    printf("path:%s\n",path);
+    
     fd = open(path,0,'r');
     if(fd < 0){
         send_error(client,404);
         perror("server send");
         return -1;
     }
-    sprintf(buf,"HTTP/1.1 201 OK\r\n"\
-               "Content-Type:jpeg \r\n"\
-               STD_HEADER\
-               "\r\n"
-       );
-    send(client,buf,strlen(buf),0);
     fstat(fd, &st);
-    printf("file size:%ld\n",st.st_size);
-    sendfile(client,fd,0,st.st_size);
-    close(fd);  
+   
+    /* determine mime-type */
+    for(int i = 0; i < sizeof(mimetypes)/sizeof(mimetypes[0]) ; i++) {
+   
+        if(strstr(path,mimetypes[i].dot_extension)) {
+            mimetype = (char *)mimetypes[i].mimetype;
+            break;
+        }
+    }
+    
+    if(mimetype){
+      
+        sprintf(buf,"HTTP/1.1 200 OK\r\n"\
+                   "Content-Type:%s \r\n"\
+                   STD_HEADER\
+                   "Content-Length:%ld\r\n"\
+                   "\r\n"\
+            ,mimetype,st.st_size);
+        send(client,buf,strlen(buf),0);
+    }
+    else{
+        send_error(client,400);
+        close(client);
+        return 0;
+    
+    }
+    
+    if(sendfile(client,fd,0,st.st_size)==-1){
+        perror("sendfile");
+        return 0;
+    }
+    close(fd);   
+    return st.st_size;
 }
+
+/*multipart/x-mixed-replace用于服务器推送server push和HTTP流 stream*/
+
+int send_stream(int client){
+
+    char buf[255];
+    sprintf(buf, "HTTP/1.1 200 OK\r\n" \
+            STD_HEADER \
+            "Content-Type: multipart/x-mixed-replace;boundary=" BOUNDARY "\r\n" \
+            "\r\n" \
+            "--" BOUNDARY "\r\n");
+
+    if(write(client, buf, strlen(buf)) < 0) {
+        return 0;
+    }
+      for(;;) { 
+           // printf("sendjpegbuf\n");
+           //内存空间出队列
+            ioctl(fd, VIDIOC_DQBUF, &v4l2buf);
+
+           //printf("jpeg buf index%d\n",v4l2buf.index);
+            //sprintf(name,"./%d.jpg",v4l2buf.index);
+           jpeg_size=compress_yuyv_to_jpeg(framebuf[v4l2buf.index].start,&jpeg_frame_buffer,80,mycamera.width,mycamera.height); //压缩为jpeg格式，压缩质量为80
+          // printf("jpeg addr:%p\n",jpeg_frame_buffer);
+          // printf("jpeg size:%d\n",jpeg_size);
+    
+            /* 内存重新入队列*/
+          // memcpy(sendbuf,jpeg_frame_buffer,jpeg_size);
+             
+           send_jpeg_frame(client,jpeg_frame_buffer,jpeg_size);
+           //free(jpeg_frame_buffer);
+         
+            ioctl(fd, VIDIOC_QBUF, &v4l2buf);
+          
+        }
+  
+
+}
+
 int send_jpeg_frame(int client,char *jpegbuf,const int size){
     
     char buf[255];
@@ -355,8 +348,8 @@ int get_line(int client_sock, char *buf, int size){
  int n;
 
     while ((i < size - 1) && (c != '\n')) {
-        n = recv(client_sock, &c, 1, 0);     //取一个字符到c，返回n
-        /* DEBUG printf("%02X\n", c); */
+       n = recv(client_sock, &c, 1, 0);     //取一个字符到c，返回n
+     
         if (n > 0)                    //如果有
         {
             if (c == '\r')               //如果是回车
@@ -374,15 +367,12 @@ int get_line(int client_sock, char *buf, int size){
         c = '\n';                    //数据读完令c为换行符
     }
     buf[i] = '\0';                  //读完行，最后一个为0
+    
 
  return(i);//返回行字符数
 }
 
 
-
-int my_send(int fd,char *sendbuf);
-
-int my_recv(int fd,char *recvmsg);
 
 
 

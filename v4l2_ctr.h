@@ -20,7 +20,22 @@
 #include <asm/types.h>        
 #include <linux/videodev2.h>
 
+#define DEBUG 
 
+
+#ifndef DBG
+
+#ifdef DEBUG
+#define DBG(...) fprintf(stderr, " DBG(%s, %s(), %d): ", __FILE__, __FUNCTION__, __LINE__); fprintf(stderr, __VA_ARGS__)
+#else
+#define DBG(...)
+#endif
+
+#endif
+
+#ifndef LOG
+#define LOG(...) { char _bf[1024] = {0}; snprintf(_bf, sizeof(_bf)-1, __VA_ARGS__); fprintf(stderr, "%s", _bf); syslog(LOG_INFO, "%s", _bf); }
+#endif
 typedef struct VideoBuffer{
     void   *start;
     size_t  length;
